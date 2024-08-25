@@ -2,7 +2,7 @@
 """ Console Module """
 import cmd
 import sys
-from models.base_model import BaseModel, storage_type
+from models.base_model import BaseModel
 from models.__init__ import storage
 from models.user import User
 from models.place import Place
@@ -113,62 +113,26 @@ class HBNBCommand(cmd.Cmd):
         """ Overrides the emptyline method of CMD """
         pass
 
-    def validate_value(self, value):
-        """Validates a value and casts it to the correct
-        type if necessary"""
-        # Parsing strings => a string is only valid if its
-        # length is greater than or equal to 2 and is
-        # double-quoted
-        # Ex: "String"
-        if len(value) >= 2 and value[0] == "\"" and value[-1] == "\"":
-            value = value.strip()
-            value = value[1:-1].replace("_", " ")
-            return value
-
-        # Parsing floats => if value contains a ".", it must
-        # be converted to float and returned. If the value
-        # cannot be casted, None is returned instead
-        if "." in value:
-            try:
-                return float(value)
-            except ValueError as e:
-                return None
-        # Parsing ints => similar to parsing a float
-        else:
-            try:
-                return int(value)
-            except ValueError as e:
-                return None
-
     def do_create(self, args):
         """ Create an object of any class"""
-        if not args:
+        try:
+            if not args:
+                raise SyntaxError()
+            arg_list = args.split(" ")
+            kw = {}
+            for arg in arg_list[1:]:
+                arg_splited = arg.split("=")
+                arg_splited[1] = eval(arg_splited[1])
+                if type(arg_splited[1]) is str:
+                    arg_splited[1] = arg_splited[1].replace("_", " ").replace('"', '\\"')
+                kw[arg_splited[0]] = arg_splited[1]
+        except SyntaxError:
             print("** class name missing **")
-            return
-        # Isolate class name from the rest of the input
-        usr_input = args.partition(" ") # (cls, " ", "args/values")
-        _cls = usr_input[0]
-        if _cls not in HBNBCommand.classes:
+        except NameError:
             print("** class doesn't exist **")
-            return
-
-        new_instance = HBNBCommand.classes[_cls]()
-
-        if len(usr_input) == 3:
-            # Split the parameters
-            args_vals = usr_input[2].split()
-            for pair in args_vals:
-                attributes = pair.split("=")
-                if len(attributes) != 2:
-                    continue
-                if not hasattr(new_instance, attributes[0]):
-                    continue
-                valid_value = self.validate_value(attributes[1])
-                if valid_value is not None:
-                    setattr(new_instance, attributes[0], valid_value)
-        storage.new(new_instance)
+        new_instance = HBNBCommand.classes[arg_list[0]](**kw)
+        new_instance.save()
         print(new_instance.id)
-        storage.save()
 
     def help_create(self):
         """ Help information for the create method """
@@ -245,23 +209,16 @@ class HBNBCommand(cmd.Cmd):
         """ Shows all objects, or all objects of a class"""
         print_list = []
 
-        if storage_type != "db":
-            objects = storage._FileStorage__objects
-        else:
-            objects = storage.all(args) if args else storage.all()
-
         if args:
             args = args.split(' ')[0]  # remove possible trailing args
             if args not in HBNBCommand.classes:
                 print("** class doesn't exist **")
                 return
-            for k, v in objects.items():
-                if k.split('.')[0] == args:
-                    print_list.append(str(v))
-        else:
-            for k, v in objects.items():
+            for k, v in storage.all(HBNBCommand.classes[args]).items():
                 print_list.append(str(v))
-
+        else:
+            for k, v in storage.all().items():
+                print_list.append(str(v))
         print(print_list)
 
     def help_all(self):
